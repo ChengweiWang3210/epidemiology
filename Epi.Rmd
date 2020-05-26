@@ -1,0 +1,731 @@
+---
+title: "Epidemiology_BasicDescription"
+author: "Chengwei Wang"
+date: "11/27/2019"
+output:
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.width=12, fig.height=8)
+library(data.table)
+library(stringr)
+library(tidyr)
+library(dplyr)
+library(Matrix)
+library(ggplot2)
+library(kableExtra)
+setwd("/Users/greatyifan/Desktop/@Columbia/2019fall/0.Precision/epidemiology")
+```
+
+```{r loading files, include=FALSE}
+dt_whole <- fread('epidemiology_mesh.csv',stringsAsFactors = F)
+setnames(dt_whole,'V1','index')
+dt <- fread('epidemiology_summary_year.csv',stringsAsFactors = F)
+loc <- fread('index_mesh_epi.csv', stringsAsFactors = F)[,'x']
+loc <- unlist(loc)
+dt_major <- dt_whole[loc,]
+dt_sub <- dt_whole[-loc,]
+```
+
+```{r extract subheading, include=FALSE}
+dt_whole$mesh <- tolower(dt_whole$mesh)
+dt_whole$mesh <- str_remove_all(dt_whole$mesh,"\\[|\\]|'|\\*")
+dt_text <- dt_whole[,c('index','mesh','year')]
+
+sep_txt <- separate_rows(dt_text, mesh, sep = ', ')
+major_mesh <- unique(sep_txt$mesh)[str_detect(unique(sep_txt$mesh),'^epidemiology.{0,}')]
+# unique(sep_txt$mesh)[str_detect(unique(sep_txt$mesh),'.{1,}/epidemiology')]
+```
+
+## 1. General Description (total number of articles)
+
+There are two type of data in the search of MeSH term "Epidemiology", one is "Epidemiology" as a major MeSH term and with 15 subheadings, one is "epidemiology" as other MeSH terms' subheading, for example "caliciviridae infections/epidemiology" or "denmark/epidemiology", there are 1465 MeSH terms like this (having "epidemiology" as its subheading.)
+
+List of MeSH terms in first situation -- "Epidemiology" as the major MeSH term -- is shown below. 
+
+```{r, echo=FALSE}
+knitr::kable(major_mesh[-c(3,13)],format = 'html')%>% 
+  kable_styling("striped",full_width = F) %>% 
+  scroll_box(width = "100%")
+```
+
+\Newline
+
+There are in total **`r dt_whole[,.N]`** articles tagged under the MeSH term "epidemiology", in which **`r dt_major[,.N]`** articles are with MeSH term "Epidemiology" and its subheadings, and other **`r dt_sub[,.N]`** articles are with other MeSH terms with subheading "epidemiology".
+
+All the data analysis are only based on the first part of data ("Epidemiology" as the major MeSH term and has 15 subheadings.)
+
+## 2. Distribution of number of articles by year
+
+The MeSH term "Epidemiology" started to appear since 1945. Below is the graph showing the number of acticles tagged with this MeSH terms published in each year from 1945 to 2019. 
+
+Numbers below 200 are not shown in the graph for simplificaion purpose. In sum, from 1963 to 1965 there are extremely more "Epidemiology" acticles published, and from 2000 to 2018, the number does not change very much.
+
+```{r set if major or include sub, include=FALSE}
+major = TRUE
+if (major){
+  loc <- fread('index_mesh_epi.csv', stringsAsFactors = F)[,'x']
+  loc <- unlist(loc)
+} else {
+  loc <- unlist(dt_whole$index)
+}
+dt_yr <- dt[loc,.N,by=year]
+setorder(dt_yr,-year)
+dt_yr
+setorder(dt_yr,-N)
+dt_yr
+```
+
+
+```{r total year, echo=FALSE}
+ggplot(data = dt_yr, aes(x = (year), y = N)) +
+  geom_point()+
+  geom_line()+
+  theme_classic()+
+  geom_text(data = dt_yr %>% filter(N > 200), aes(label = N), vjust= -1, size = 3) +
+  labs(x = 'Year', y = 'Count', title = 'Number of Articles By Year')+
+  theme(axis.title.y = element_text(angle = 360, vjust = 0.6), axis.text.y = element_text (size = 10))+
+  theme(axis.text.x = element_text (angle = 60, size = 6, vjust = 0.5, hjust = 0.4))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_x_continuous("year", labels = as.character(dt_yr$year),
+                              breaks = dt_yr$year)
+```
+
+```{r, echo=FALSE}
+setorder(dt_yr,year)
+knitr::kable(dt_yr,format = 'html',align = rep(c('l','c','c'),75))%>% 
+  kable_styling("striped") %>% 
+  kable_styling(position = 'center') %>%
+  scroll_box(width = "300px", height = '200px')
+```
+
+
+Below is how the proportion of each year's article in the total number of articles changed from 2000 to 2018. As we can see, the percentage point did not change a lot.
+
+
+```{r, include=FALSE}
+tmp <- dt_yr[year %in% 2000:2018]
+setorder(tmp,year)
+ggplot(data = tmp, aes(x = (year), y = N)) +
+  geom_point()+
+  geom_line()+
+  theme_classic()+
+  geom_text(data = tmp %>% filter(N > 0), aes(label = N), vjust= -1.5, hjust = .5, size = 2) +
+  labs(x = 'Year', y = 'Count', title = 'Number of Articles By Year from 2000 to 2018')+
+  theme(axis.title.y = element_text(angle = 360, vjust = 0.6), axis.text.y = element_text (size = 10))+
+  theme(axis.text.x = element_text (angle = 60, size = 6, vjust = 0.5, hjust = 0.4))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_x_continuous("year", labels = as.character(dt_yr$year),
+                              breaks = dt_yr$year)
+```
+
+
+```{r, echo=FALSE}
+tmp <- dt_yr[year %in% 2000:2018]
+setorder(tmp,year)
+tmp[,percent:=N/dt_yr[,sum(N)]]
+ggplot(data = tmp, aes(x = (year), y = percent)) +
+  geom_point()+
+  geom_line()+
+  theme_classic()+
+  geom_text(data = tmp %>% filter(percent > 0), aes(label = paste0(round(percent,3)*100,'%')), vjust= -1.5, hjust = .5, size = 5) +
+  labs(x = 'Year', y = 'Count', title = 'Percentage of Number of Articles By Year from 2000 to 2018')+
+  theme(axis.title.y = element_text(angle = 360, vjust = 0.6), axis.text.y = element_text (size = 10))+
+  theme(axis.text.x = element_text (angle = 60, size = 6, vjust = 0.5, hjust = 0.4))+
+  theme(plot.title = element_text(hjust = 0.5))+
+  scale_x_continuous("year", labels = as.character(dt_yr$year),
+                              breaks = dt_yr$year)+
+  ylim(0, 0.05)
+
+```
+
+
+## 3. Distribution of number of articles by journal
+
+```{r,include=FALSE}
+length(loc)
+dt_jr <- dt[loc,.N,by=journal]
+setorder(dt_jr,-N)
+dt_jr[,cum_sum:=cumsum(N)]
+dt_jr[,cum_percent:=cumsum(N)/sum(N)]
+twp <- which(dt_jr$cum_percent>0.20)[1] #how many magazine exceed 20%
+dt_jr[twp,'cum_sum']
+```
+
+Th first `r twp` journals have published `r dt_jr[twp,'cum_sum']` articles with MeSH term "Epidemiology" across all the years in total, accounting for nearly 20% of the total articles.
+
+```{r, echo=FALSE}
+dt_jr$journal = factor(dt_jr$journal,levels = rev(dt_jr$journal))
+ggplot(data = dt_jr[1:twp,], aes(x = journal, y = N))+
+  geom_bar(stat = 'identity', position = position_dodge(width=10), width = 0.5)+
+  #theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  scale_x_discrete(labels = function(x)str_wrap(x,30))+ #stringr package
+  theme_classic()+  
+  geom_text(aes(label = N), hjust= -0.1) +
+  labs(x = 'Journal', y = 'Count', title = 'Number of Publication By Journals')+
+  theme(axis.title.y = element_text(angle = 360, vjust = 0.6), axis.text.y = element_text (size = 10))+
+  theme(plot.title = element_text(hjust = 0.3))+
+  coord_flip()
+```
+
+```{r, echo=FALSE}
+knitr::kable(dt_jr[1:twp,1:2],format = 'html',align = c('l','c'))%>% 
+  kable_styling("striped") %>% 
+  scroll_box(width = "100%")
+```
+
+
+## 4. Table showing top 20 journals publishing the most of "Epidemiology" articles 
+
+The table below shows that, for each journal, the proportion of all the articles tagged with "Epidemiology" in its total number of published articles all the years they have data (some of them do not have data before 2000, some of them have data point in 90s).
+
+Sorted by the proportion in a descending order, the first 20 journals are shown in the table. 
+
+```{r, include=FALSE}
+dt_100 <- fread('epi_pubmed_journal.csv', stringsAsFactors = F)
+dt100_jr <- dt_100[,sum(total),by=journal]
+
+dt1 <- fread('epidemiology_summary_year.csv', stringsAsFactors = F)
+dt_jr <- dt1[,.N,by=.(journal)]
+
+head(dt_jr,5)
+
+dt_all <- dt_jr[dt100_jr,on=c('journal')]
+dim(dt_all)
+colnames(dt_all)
+setnames(dt_all,'V1','total')
+dt_all[,percent:=N/total]
+setorder(dt_all,-percent)
+dt_all[,percent:=paste0(round(percent,3)*100,'%')] 
+final_res <- dt_all
+setnames(final_res,'N','count')
+final_res[1:20,]
+```
+
+
+```{r, echo=FALSE}
+knitr::kable(final_res[1:20,],align = c('l',rep('c',3)))%>%
+  kable_styling('striped')%>%
+  scroll_box(width="100%")
+```
+
+
+
+
+
+
+
+
+
+```{r co-oc graph, include=F, echo=F}
+# sep_txt <- sep_txt[index %in% loc]
+# 
+# idx <- str_detect(sep_txt$mesh,'^epidemiology.{0,}')
+# sep_txt[idx]$mesh <- "epidemiology"
+# 
+# sep_txt[,loc:= match(mesh, unique(sep_txt$mesh))]
+# 
+# txt_ana <- sep_txt[,c('index','loc','mesh')]
+# setnames(txt_ana,colnames(txt_ana),c('row','col','term'))
+# txt_ana[,val:=rep(1,nrow(txt_ana))]
+# 
+# smx <- sparseMatrix(i = txt_ana$row, j = txt_ana$col, x = txt_ana$val)
+# 
+# tcm <- t(smx) %*% smx
+# 
+# 
+# co_occur <- tcm[which(unique(txt_ana$term) == 'epidemiology'),]
+# coo_dt <- as.data.table(co_occur)
+# coo_dt[,term:=unique(txt_ana$term)]
+# setorder(coo_dt,-co_occur)
+# coo_dt <- coo_dt[,c('term','co_occur')]
+# dt_plot <- coo_dt[-1][1:10,]
+# 
+# dt_plot$term <- factor(dt_plot$term, level = rev(dt_plot$term))
+# ggplot(data = dt_plot,aes(x = term, y = co_occur)) +
+#   geom_bar(stat = 'identity')+
+#   theme_classic()+
+#   geom_text(aes(label = co_occur), hjust= -0.1) +
+#   labs(x = 'MeSH\nterms', y = 'Count', title = 'Ten MeSH Terms Most Related To "Epidemiology"')+
+#   theme(axis.title.y = element_text(angle = 360, vjust = 0.6), axis.text.y = element_text (size = 8))+
+#   coord_flip()
+
+```
+
+```{r bottum, include=FALSE}
+major = TRUE
+if (major){
+  loc <- fread('index_mesh_epi.csv', stringsAsFactors = F)[,'x']
+  loc <- unlist(loc)
+} else {
+  loc <- unlist(dt_whole$index)
+}
+```
+
+```{r, include=FALSE}
+dt_whole <- fread('epidemiology_mesh.csv',stringsAsFactors = F)
+setnames(dt_whole,'V1','index')
+dt <- fread('epidemiology_summary_year.csv',stringsAsFactors = F)
+
+dt <- dt_whole[dt,on='link']
+dt <- dt[loc,]
+
+sub_mesh <- fread('sub_mesh.csv',stringsAsFactors = F)
+sub_mesh <- sub_mesh$V2[-1]
+```
+
+```{r function, include=FALSE}
+# LOOP
+myfun <- function(by_year, pick_years, pm_subheading, target_term){
+  if (by_year){
+    dt_subset <- dt[year %in% pick_years]
+} else{
+  dt_subset <- dt
+}
+
+  dt_text <- dt_subset[,'mesh']
+  dt_text[,n:= 1: nrow(dt_text)]
+  
+  sep_txt <- separate_rows(dt_text, mesh, sep = ', ')
+  sep_txt <- as.data.table(sep_txt)
+  if (!pm_subheading){
+    sep_txt[which(str_detect(mesh,'epidemiology'))]$mesh <- 'epidemiology'
+  }
+  
+  mesh_terms <<- unique(sep_txt$mesh)
+  
+  sep_txt[,loc:= match(mesh, mesh_terms)]
+  sep_txt <- sep_txt[,c('n','loc','mesh')]
+  setnames(sep_txt,colnames(sep_txt),c('row','col','term'))
+  sep_txt[,val:=rep(1,nrow(sep_txt))]
+  
+  smx <- sparseMatrix(i = sep_txt$row, j = sep_txt$col, x = sep_txt$val)
+  dim(smx)
+  
+  tcm <- t(smx) %*% smx
+  dim(tcm)
+  colnames(tcm) <- mesh_terms
+  rownames(tcm) <- mesh_terms
+  
+  
+  if (pm_subheading) {
+    idx <- which(mesh_terms == target_term)
+    co_occur <- tcm[idx,]
+    coo_dt <- as.data.table(co_occur)
+    coo_dt[,term:=unique(sep_txt$term)]
+    setorder(coo_dt,-co_occur)
+    coo_dt <- coo_dt[,c('term','co_occur')]
+    idx = which(str_detect(coo_dt$term, target_term))
+    coo_dt <- coo_dt[-idx]
+    dt_plot <- coo_dt[1:10,] 
+    n = which(sub_mesh %in% target_term)
+    assign(x = paste0('sub',n), coo_dt, envir = .GlobalEnv)
+    dt_plot$term <- factor(dt_plot$term, level = rev(dt_plot$term))
+    g <- ggplot(data = dt_plot,aes(x = term, y = co_occur)) +
+      geom_bar(stat = 'identity')+
+      labs(title = paste('Top 10 Co-occurence Terms for',target_term))+
+      coord_flip()
+    assign(paste0('sub_',gsub('epidemiology/','', target_term)),g, envir = .GlobalEnv)
+  } else if (by_year) {
+    idx <- which(mesh_terms == 'epidemiology')
+    co_occur <- tcm[idx,]
+    coo_dt <- as.data.table(co_occur)
+    coo_dt[,term:=unique(sep_txt$term)]
+    coo_dt <- coo_dt[,c('term','co_occur')]
+    setorder(coo_dt,-co_occur)
+    idx = which(str_detect(coo_dt$term, 'epidemiology'))
+    coo_dt <- coo_dt[-idx] #remove epidemiology itself
+    dt_plot <- coo_dt[1:10,]
+    dt_plot$term <- factor(dt_plot$term, level = rev(dt_plot$term))
+    name = paste0('co_',pick_years)
+    print(name)
+    assign(x = name, coo_dt, envir = .GlobalEnv)
+    g <- ggplot(data = dt_plot,aes(x = term, y = co_occur)) +
+      geom_bar(stat = 'identity')+
+      coord_flip()
+    g <- g + 
+      labs(title = paste('Top 10 Co-occurence Terms in',pick_years))
+    assign(paste0('g',pick_years),g, envir = .GlobalEnv)
+  } else {
+    idx <- which(mesh_terms == 'epidemiology')
+    co_occur <- tcm[idx,]
+    dt_total <- as.data.table(co_occur)
+    dt_total[,term:=mesh_terms]
+    setorder(dt_total,-co_occur)
+    dt_total <- dt_total[,c('term','co_occur')]
+    idx = which(str_detect(dt_total$term, 'epidemiology'))
+    dt_total <- dt_total[-idx]
+    assign('dt_total', dt_total, envir = .GlobalEnv)
+    dt_plot <- dt_total[1:10,]
+    dt_plot$term <- factor(dt_plot$term, level = rev(dt_plot$term))
+    g <- ggplot(data = dt_plot,aes(x = term, y = co_occur)) +
+      geom_bar(stat = 'identity')+
+      coord_flip()
+    assign('g_total',g, envir = .GlobalEnv)
+  }
+}
+
+```
+
+```{r generating_separate_year_dt, include=FALSE}
+by_year = TRUE; pm_subheading = FALSE
+for (i in 1:uniqueN(dt$year)){
+  pick_years = unique(dt$year)[i]
+  myfun(by_year,pick_years,pm_subheading, target_term)
+}
+```
+
+```{r generating_separate_subheading, include=FALSE}
+by_year = FALSE; pm_subheading = TRUE
+for (i in 1:length(sub_mesh)){
+  target_term = sub_mesh[i]
+  myfun(by_year,pick_years,pm_subheading, target_term)
+}
+```
+
+```{r generating_total_dt, include=FALSE}
+by_year = FALSE; pm_subheading = FALSE
+myfun(by_year,pick_years,pm_subheading, target_term)
+```
+
+
+### 5. Top 10 Co-occurring MeSH Terms of "Epidemiology" (without subheading; across time)
+
+There are **`r nrow(dt_total)`** MeSH terms that co-occur with "Epidemiology" (including subheadings). The top ten co-occurring mesh terms are shown below, along with the graph. 
+
+The data used in this table includes all the MeSH terms co-occurring with "Epidemiology" from 1945 to 2019.
+
+```{r, echo=FALSE}
+dt_total[,percent:=co_occur/sum(co_occur)]
+dt_total[,percent:=paste0(round(percent,digit = 3)*100,'%')]
+knitr::kable(dt_total[1:10,],format = 'html')%>% 
+  kable_styling("striped",full_width = F) %>% 
+  scroll_box(width = "100%")
+```
+
+### 6. Top 10 Co-occurring Mesh Terms of "Epidemiology" in EACH YEAR (without subheading) 
+
+Below is the table showing the top 10 MeSH terms co-occurring with "Precision Medicine" (without subheadings) in each year (from 1945 to 2019).
+
+
+```{r, include=FALSE}
+top10 <- data.table(rep(NA,10))
+gen_top10 <- function(i){
+  x <- eval(parse(text = paste0('co_',i)))
+  setorder(x,-co_occur)
+  x[,percent:=co_occur/sum(co_occur)]
+  x[,percent:=paste0(round(percent,digit = 3)*100,'%')]
+  top10<<-cbind(top10,x[1:10,])
+}
+sapply(2019:1945,gen_top10)
+top10 <- top10[,-1]
+colnames(top10) <- rep(as.character(2019:1945),each = 3)
+colnames(top10)[seq(2,225,by=3)] <- rep('count',75)
+colnames(top10)[seq(3,225,by=3)] <- rep('percent',75)
+```
+
+```{r,echo=FALSE}
+knitr::kable(top10,format = 'html',align = rep(c('l','c','c'),75))%>% 
+  kable_styling("striped") %>% 
+  column_spec(seq(3,225,by=3),border_right = T)%>%
+  scroll_box(width = "100%")
+```
+
+### 7. Top 10 Co-occurring Mesh Terms of EACH SUBHEADING of "Epidemiology" (across time)
+
+Below is the table showing the top 10 MeSH terms co-occurring with the subheadings of "Epidemiology" across time. (Excluding the subheading "veterinary", there are 14 subheadings.)
+
+The data used in this table includes all the MeSH terms co-occurring with "Epidemiology" from 1945 to 2019.
+
+```{r, include=FALSE}
+subtop_10 <- data.table(rep(NA,10))
+gen_subtop_10 <- function(i){
+  x <- eval(parse(text = paste0('sub',i)))
+  setorder(x,-co_occur)
+  x[,percent:=co_occur/sum(co_occur)]
+  x[,percent:=paste0(round(percent,digit = 3)*100,'%')]
+  subtop_10<<-cbind(subtop_10,x[1:10,])
+}
+sapply(1:length(sub_mesh),gen_subtop_10)
+subtop_10 <- subtop_10[,-1]
+colnames(subtop_10) <- rep(toupper(as.character(gsub('epidemiology','',sub_mesh))),each=3)
+colnames(subtop_10)[seq(2,45,by=3)] <- rep('count',10)
+colnames(subtop_10)[seq(3,45,by=3)] <- rep('percent',10)
+```
+
+```{r, echo=FALSE}
+knitr::kable(subtop_10[,-(40:42)], format = 'html',align = rep(c('l','c','c'),14)) %>% 
+  kable_styling("striped") %>% 
+  column_spec(seq(3,42,by=3),border_right = T) %>%
+  scroll_box(width = "100%")
+```
+
+```{r start of change}
+```
+
+```{r generating_absolute_change, include=FALSE}
+dt_time <- data.table(mesh_terms)
+
+get_compare <- function(i){
+  x <- eval(parse(text = paste0('co_',i)))
+  dt_time[mesh_terms %in% x$term, paste0('y',as.character(i)):=x$co_occur]
+}
+
+sapply(as.list(1945:2019), get_compare)
+dt_time
+dt_time[is.na(dt_time)] <- 0
+
+for(x in 2:(length(colnames(dt_time))-1)){
+  i = colnames(dt_time)[x]
+  j = colnames(dt_time)[x+1]
+  dt_time[,paste(i,j,sep='_'):= eval(parse(text = j)) - eval(parse(text = i))]
+}
+
+colnames(dt_time)
+sta <- ncol(dt_time)-length(1945:2019)+2
+end <- ncol(dt_time)
+range(sta,end)
+colnames(dt_time[,c(1,77:150)])
+
+#sharp increase
+tmp <- dt_time[,c(132:149)]
+tmp <- tmp > 50
+tmp <- as.data.table(tmp)
+table(apply(tmp,1,sum))
+
+dt_time$increase <- apply(tmp,1,sum)
+
+# sharp_increase_terms <- dt_time[increase>0]
+
+
+#sharp decrease
+tmp <- dt_time[,c(132:149)]
+tmp <- tmp < -50
+tmp <- as.data.table(tmp)
+table(apply(tmp,1,sum))
+
+dt_time$drop <- apply(tmp,1,sum)
+
+# sharp_drop_terms <- dt_time[drop>0]
+
+changes <- dt_time[increase>0 | drop > 0]
+n_count <<- nrow(changes)
+
+for (i in 1:nrow(changes)){
+  x = ''
+  if (changes[i,]$increase == 0) {
+    x = 'sharp drop'
+  } else if (changes[i,]$drop == 0) {
+    x = 'sharp increase'
+  } else {
+    x = 'sharp increse & drop'
+  }
+  item <- changes[i,57:75]
+  item <- data.table(2000:2018,as.integer(item))
+  assign(paste0('g_',i),ggplot(data = item, aes(x = V1, y = V2))+
+           geom_point()+
+           geom_line()+
+           labs(title = paste0(changes$mesh_terms[i],': ',x))+
+           scale_x_continuous("year", 
+                              labels = as.character(item$V1),
+                              breaks = item$V1)+
+           theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+           geom_text(data= item %>% filter(V2 > 0),aes(label=V2),
+                     hjust = 1.2,vjust = -0.05, size = 3)
+  )
+}
+```
+
+
+
+```{r generating_percentage_change, include=FALSE}
+dt_percent_time <- dt_time[,1:76]
+for(x in 2:length(colnames(dt_percent_time))){
+  i = colnames(dt_percent_time)[x]
+  dt_percent_time[,paste('perc',i,sep='_'):= eval(parse(text = i))/sum(eval(parse(text = i)))]
+}
+dt_percent_time <- dt_percent_time[,c(1,77:151)]
+for(x in 2:(length(colnames(dt_percent_time))-1)){
+  i = colnames(dt_percent_time)[x]
+  j = colnames(dt_percent_time)[x+1]
+  dt_percent_time[,paste(i,j,sep='_'):= eval(parse(text = j)) - eval(parse(text = i))]
+}
+
+idx = 132:149 #whole year 77:150
+#sharp increase
+tmp <- dt_percent_time[,132:149]
+tmp <- tmp > 0.01
+tmp <- as.data.table(tmp)
+table(apply(tmp,1,sum))
+
+dt_percent_time$increase <- apply(tmp,1,sum)
+
+#sharp decrease
+tmp <- dt_percent_time[,c(132:149)]
+tmp <- tmp < -0.01 #none
+tmp <- as.data.table(tmp)
+table(apply(tmp,1,sum))
+
+dt_percent_time$drop <- apply(tmp,1,sum)
+
+#ggplot
+changes <- dt_percent_time[increase>0 | drop > 0]
+n_percentage <<- nrow(changes)
+
+for (i in 1:nrow(changes)){
+  x = ''
+  if (changes[i,]$increase == 0) {
+    x = 'sharp drop'
+  } else if (changes[i,]$drop == 0) {
+    x = 'sharp increase'
+  } else {
+    x = 'sharp increse & drop'
+  }
+  item <- changes[i,57:75] #2:76 if whole
+  item <- data.table(2000:2018,as.numeric(item))
+  assign(paste0('per_g_',i),ggplot(data = item, aes(x = V1, y = V2))+
+           geom_point()+
+           geom_line()+
+           labs(title = paste0(changes$mesh_terms[i],': ',x))+
+           scale_x_continuous("year", 
+                              labels = as.character(item$V1),
+                              breaks = item$V1)+
+           theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+           geom_text(data= item %>% filter(V2 > 0),
+                     aes(label=round(V2,3)),
+                     hjust = 1.2,vjust = -0.05, size = 3)
+  )
+}
+```
+
+
+```{r generating_changing_rate, include=FALSE}
+# dt_change_rate <- dt_time[,1:10]
+
+idx <- which(apply(dt_time[,2:76] == 1,1,sum) != 0) # columns having only 1 count
+length(idx)
+dt_time[!idx,]
+idx <- c(idx, which(apply(dt_time[,2:76] == 0,1,sum) == 9))
+length(idx)
+dt_change_rate <- dt_time[-idx,1:76]
+
+for(x in 2:(length(colnames(dt_change_rate))-1)){
+  i = colnames(dt_change_rate)[x]
+  j = colnames(dt_change_rate)[x+1]
+  dt_change_rate[,paste(i,j,sep='_'):= (eval(parse(text = j)) - eval(parse(text = i)))/eval(parse(text = i))]
+}
+
+#' NaN means from 0 to 0;
+#' Inf means from 0 to some number; 
+#' -1 means from any number to 0
+
+#sharp increase
+tmp <- dt_change_rate[,c(77:150)]
+summary(tmp)
+tmp <- tmp == 'Inf'
+tmp[is.na(tmp)] <- 0
+table(apply(tmp,1,sum))
+# there are only 3 terms not change from 0 to 1, the rest of them do change from 0 to some number.
+
+tmp <- dt_change_rate[,c(132:149)] #77:150
+tmp <- tmp != 'Inf' & tmp > 1
+tmp[is.na(tmp)] <- 0
+table(apply(tmp,1,sum))
+
+dt_change_rate$increase <- apply(tmp,1,sum)
+
+#check for the irrelavant mesh term
+# idx <- which(dt_change_rate$increase == 1)
+# colnames(tmp)[which(tmp[idx[353],] == 1)]
+# dt_change_rate[idx[353],]
+
+#sharp decrease
+tmp <- dt_change_rate[,c(77:150)]
+tmp <- tmp == -1
+tmp[is.na(tmp)] <- 0
+table(apply(tmp,1,sum))
+# only 3 terms never fall to 0
+
+tmp <- dt_change_rate[,c(132:149)]
+tmp <- tmp != - 1 & tmp < -0.5
+tmp[is.na(tmp)] <- 0
+table(apply(tmp,1,sum))
+
+dt_change_rate$drop <- apply(tmp,1,sum)
+
+#ggplot
+changes <- dt_change_rate[increase>0] # drop > 0]
+n_rate <<- nrow(changes)
+for (i in 1:nrow(changes)){
+  x = ''
+  if (changes[i,]$increase == 0) {
+    x = 'sharp drop'
+  } else if (changes[i,]$drop == 0) {
+    x = 'sharp increase'
+  } else {
+    x = 'sharp increse & drop'
+  }
+  item <- changes[i,57:75]
+  item <- data.table(2000:2018,as.numeric(item))
+  assign(paste0('rate_g_',i),ggplot(data = item, aes(x = V1, y = V2))+
+           geom_point()+
+           geom_line()+
+           labs(title = paste0(changes$mesh_terms[i],': ',x))+
+           scale_x_continuous("year", 
+                              labels = as.character(item$V1),
+                              breaks = item$V1)+
+           theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+           geom_text(data= item %>% filter(V2 > 0),
+                     aes(label=round(V2,3)),
+                     hjust = 1.2,vjust = -0.05, size = 3)
+  )
+}
+```
+
+
+## 8. Trend of counts of co-occurring Mesh Terms (changed 50 counts in one year)
+
+This calculation means when one MeSH term has 50 counts more or less in one year than that of the previous year.
+
+There are **`r n_count`** MeSH terms meet this standard. 
+
+```{r, echo=FALSE}
+for (i in 1:n_count){
+  plot(eval(parse(text=paste0('g_',i))))
+}
+```
+
+
+## 9. Trend of percentage of co-occurring Mesh Terms (changed 1% point in one year)
+
+This percentage point change means the difference between the proportion of one Mesh Term in one year's total number of mesh term and the proportion of this term in the next year's total number. So it is the percentage point change.
+
+There are **`r n_percentage`** MeSh terms meet this criteria. 
+
+```{r, echo=FALSE}
+for (i in 1:n_percentage){
+  plot(eval(parse(text=paste0('per_g_',i))))
+}
+```
+
+
+## 10. Trend of count of co-occurring Mesh Terms for rate of change exceeding certain percentage
+The rate of change means $\frac{C_{t}-C_{t-1}}{C_{t-1}}$.
+
+Here, I select those terms once increased by 100% or decreased by 50%. There are `r n_rate` mesh terms meet the criterion.
+
+Besides, I rule out all the MeSH terms co-occurring with "Epidemiology" only once or zero times, because when they change from 0 to 1 or vice versa, the rate of change is also very large.
+
+After this process, 870 MeSH terms remain in the dataset while 10111 MeSH terms are deleted. 
+
+```{r, echo=FALSE}
+for (i in 1:n_rate){
+  plot(eval(parse(text=paste0('rate_g_',i))))
+}
+```
